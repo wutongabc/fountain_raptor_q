@@ -1,0 +1,31 @@
+[package]
+name = "fountain_raptor_q"
+version = "1.0.0"
+edition = "2024"
+authors = ["Zigeng Xu", "Shenghao Yang"]
+license = "MIT"
+description = "RaptorQ fountain code scheme built on fountain_engine"
+repository = "https://github.com/wutongabc/fountain_raptor_q"
+documentation = "https://docs.rs/fountain_raptor_q"
+keywords = ["fountain-code", "erasure-coding", "raptor-code", "fec", "rfc6330"]
+categories = ["algorithms", "encoding", "network-programming"]
+readme = "README.md"
+include = [
+    "src/**",
+    "examples/**",
+    "tests/**",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
+
+[dependencies]
+fountain_engine = "1.2.1"
+fountain_scheme = "1.1.0"
+fountain_utility = "1.1.0"
+csv = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1.0"
+rand = "0.8.5"
