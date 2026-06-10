@@ -1,12 +1,12 @@
-use crate::generators::rand_num_gen::rand;
-use crate::generators::RFC6330DegreeSet;
 use crate::RQLDPC;
+use crate::generators::RFC6330DegreeSet;
+use crate::generators::rand_num_gen::rand;
 use crate::params_table;
+use fountain_engine::traits::DataOperator;
 use fountain_engine::traits::{CodeScheme, HDPC, LDPC};
 use fountain_engine::types::{CodeParams, CodeType, DecodingConfig, SubstitutionMethod};
 use fountain_engine::{Decoder, Encoder};
-use fountain_engine::traits::DataOperator;
-use fountain_scheme::precodes::{rq_hdpc, ReversedLDPC};
+use fountain_scheme::precodes::{ReversedLDPC, rq_hdpc};
 use fountain_utility::{BlockSizePolicy, PaddedDecoder, PaddedEncoder};
 
 /// RFC 6330 octet field: GF(256) with primitive polynomial `0x11D` (also [`GenericRQHDPC`](fountain_scheme::precodes::GenericRQHDPC) default).
@@ -42,7 +42,7 @@ pub struct raptor_q_main {
     params: CodeParams,
     ldpc_type: LDPCType,
     k: usize, // Store k for RFC6330DegreeSet creation
-    subs_method: SubstitutionMethod,
+    subs_method: Option<SubstitutionMethod>,
 }
 
 impl raptor_q_main {
@@ -81,7 +81,7 @@ impl raptor_q_main {
             params,
             ldpc_type,
             k,
-            subs_method: SubstitutionMethod::Direct,
+            subs_method: None,
         }
     }
 
@@ -92,7 +92,7 @@ impl raptor_q_main {
 
     /// Override the back-substitution method used during decoding.
     pub fn with_subs_method(mut self, subs_method: SubstitutionMethod) -> Self {
-        self.subs_method = subs_method;
+        self.subs_method = Some(subs_method);
         self
     }
 
@@ -221,7 +221,9 @@ impl CodeScheme for raptor_q_main {
     fn decoding_config(&self) -> DecodingConfig {
         let mut config = DecodingConfig::default();
         //config.inac_strategy = InactivationStrategy::TrailRun;
-        if self.params.k > 500 {
+        if let Some(subs_method) = self.subs_method {
+            config.subs_method = subs_method;
+        } else if self.params.k > 500 {
             config.subs_method = SubstitutionMethod::Original;
         }
         config.max_inactive_num = self.dynamic_inactivation_budget();
@@ -290,6 +292,17 @@ mod tests {
     fn no_padding_when_k_equals_k_prime() {
         let code = raptor_q_main::new(10, 10, LDPCType::RQLDPC);
         assert_eq!(code.num_padding(), 0);
+    }
+
+    #[test]
+    fn substitution_method_override_takes_precedence() {
+        let code = raptor_q_main::new_with_default_setting(1000)
+            .with_subs_method(SubstitutionMethod::Direct);
+
+        assert_eq!(
+            code.decoding_config().subs_method,
+            SubstitutionMethod::Direct
+        );
     }
 
     #[test]

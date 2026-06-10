@@ -33,7 +33,6 @@ rand = "0.8.5"
 
 [dev-dependencies]
 serde_json = "1.0"
-fountain_operators = { git = "https://github.com/shhyang/fountain_operators", features = ["simd"] }
 
 [[example]]
 name = "test_single_k_raptor_q"

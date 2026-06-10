@@ -37,8 +37,7 @@
 //!
 //! After the abstract harness, reports padded-codec encode/decode wall times at symbol sizes
 //! 128 and 1500 @ K = 5008 for **on-the-fly** and **deferred** operator execution with
-//! [`VecDataOperater`](fountain_utility::VecDataOperater), [`SlabDataOperator`], and
-//! [`SimdDataOperator`](fountain_operators::SimdDataOperator)
+//! [`VecDataOperater`](fountain_utility::VecDataOperater)
 //! ([`fountain_utility::real_symbol_benchmark`](fountain_utility::real_symbol_benchmark)):
 //!
 //! ```text
@@ -56,18 +55,18 @@
 //! cargo run -p fountain_raptor_q --example decode_profile --release --features profiling -- -s 128 5008
 //! ```
 
+use fountain_engine::CodeScheme;
 use fountain_engine::traits::DataOperator;
 use fountain_engine::types::DecodeStatus;
-use fountain_engine::CodeScheme;
-use fountain_operators::{SlabDataOperator, SimdDataOperator};
-use fountain_utility::{
-    benchmark_deferred, benchmark_on_the_fly, make_test_messages, print_real_symbol_benchmark_table,
-    save_test_results, test_code_scheme_multiple, test_code_scheme_with_data_vectors,
-    OperatorFactory, RealSymbolBenchConfig, TestResult, TestStatistics, VecDataOperater,
-};
 use fountain_raptor_q::{
-    raptor_q_main::raptor_q_main, RaptorQDecoder, RaptorQEncoder, RaptorQRealSymbolSession,
-    RFC6330_GF256_PRIMITIVE_POLYNOMIAL, PARAMS_CSV,
+    PARAMS_CSV, RFC6330_GF256_PRIMITIVE_POLYNOMIAL, RaptorQDecoder, RaptorQEncoder,
+    RaptorQRealSymbolSession, raptor_q_main::raptor_q_main,
+};
+use fountain_utility::{
+    OperatorFactory, RealSymbolBenchConfig, TestResult, TestStatistics, VecDataOperater,
+    benchmark_deferred, benchmark_on_the_fly, make_test_messages,
+    print_real_symbol_benchmark_table, save_test_results, test_code_scheme_multiple,
+    test_code_scheme_with_data_vectors,
 };
 use std::fs::File;
 use std::io::Write;
@@ -99,7 +98,8 @@ impl ExperimentStats {
     fn from_results(k: usize, results: &[TestResult]) -> Self {
         let (_, _, success_rate) = TestStatistics::success_rate(results);
         let overhead_stats = TestStatistics::overhead_stats(k, results);
-        let (prec_avg, encoding_avg, decoding_avg) = TestStatistics::avg_computation_costs(k, results);
+        let (prec_avg, encoding_avg, decoding_avg) =
+            TestStatistics::avg_computation_costs(k, results);
         let time_stats = TestStatistics::avg_time_costs(results);
 
         Self {
@@ -138,14 +138,6 @@ fn vec_operator_factory(symbol_size: usize) -> Box<dyn fountain_engine::DataOper
     Box::new(VecDataOperater::new(symbol_size))
 }
 
-fn slab_operator_factory(symbol_size: usize) -> Box<dyn fountain_engine::DataOperator> {
-    Box::new(SlabDataOperator::new(symbol_size))
-}
-
-fn simd_operator_factory(symbol_size: usize) -> Box<dyn fountain_engine::DataOperator> {
-    Box::new(SimdDataOperator::new(symbol_size))
-}
-
 /// One on-the-fly roundtrip with message bytes via padded [`RaptorQEncoder`]/[`RaptorQDecoder`].
 fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
     let code = raptor_q_main::new_with_default_setting(k);
@@ -158,7 +150,8 @@ fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
         enc_op.insert_vector(v, i);
     }
 
-    let mut encoder = RaptorQEncoder::new_with_operator(code.clone(), Box::new(enc_op), SYMBOL_SIZE);
+    let mut encoder =
+        RaptorQEncoder::new_with_operator(code.clone(), Box::new(enc_op), SYMBOL_SIZE);
     let params = code.get_params();
     let mut coded_ids: Vec<usize> = (0..source_k).collect();
     coded_ids.extend(params.num_total()..params.num_total() + num_coded.saturating_sub(source_k));
@@ -170,8 +163,11 @@ fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
         }
     }
 
-    let mut decoder =
-        RaptorQDecoder::new_with_operator(code, Box::new(VecDataOperater::new(SYMBOL_SIZE)), SYMBOL_SIZE);
+    let mut decoder = RaptorQDecoder::new_with_operator(
+        code,
+        Box::new(VecDataOperater::new(SYMBOL_SIZE)),
+        SYMBOL_SIZE,
+    );
 
     let mut decoded = false;
     for (coded_id, payload) in coded_payload {
@@ -212,11 +208,7 @@ fn print_real_symbol_benchmarks() {
         &format!("Real-symbol benchmark (G3.4 / G3.3, K={REAL_SYMBOL_K}, padded codec)"),
         REAL_SYMBOL_RUNS,
         REAL_SYMBOL_SIZES,
-        &[
-            ("VecDataOperater", vec_operator_factory as OperatorFactory),
-            ("SlabDataOperator", slab_operator_factory as OperatorFactory),
-            ("SimdDataOperator", simd_operator_factory as OperatorFactory),
-        ],
+        &[("VecDataOperater", vec_operator_factory as OperatorFactory)],
         &|symbol_size, factory| {
             let config = bench_config(symbol_size);
             let messages = make_test_messages(source_k, symbol_size);
@@ -275,7 +267,9 @@ fn main() -> std::io::Result<()> {
     );
 
     println!("=== RaptorQ (RFC 6330) Performance ===");
-    println!("Runs per K: {NUM_RUNS}, coded vectors: k * {OVERHEAD_NUMERATOR}/{OVERHEAD_DENOMINATOR}");
+    println!(
+        "Runs per K: {NUM_RUNS}, coded vectors: k * {OVERHEAD_NUMERATOR}/{OVERHEAD_DENOMINATOR}"
+    );
     println!("Test all K from parameter table: {TEST_ALL_K}");
     println!("\n{header}");
     println!("{}", "-".repeat(110));
@@ -332,7 +326,8 @@ fn main() -> std::io::Result<()> {
                     stats.avg_precoding_time_us,
                     stats.avg_encoding_time_us,
                     stats.avg_decoding_time_us,
-                    stats.encoding_operation_stats.vector_add + stats.precoding_operation_stats.vector_add,
+                    stats.encoding_operation_stats.vector_add
+                        + stats.precoding_operation_stats.vector_add,
                     stats.decoding_operation_stats.vector_add,
                 );
             }

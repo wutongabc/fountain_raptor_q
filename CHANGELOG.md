@@ -22,4 +22,4 @@ All notable changes to the published `fountain_raptor_q` crate are documented he
 
 - Crates.io tarball includes round-trip **examples** (`test_single_k_raptor_q`, `test_all_k_raptor_q`, `raptor_q_performance`, …).
 - Excludes engine2-only tooling (`scheme_profile`, `ref_raptorq_compare`, `performance_analysis/`).
-- `raptor_q_performance` uses optional dev-dependency [`fountain_operators`](https://github.com/shhyang/fountain_operators) (Git) for Slab/SIMD operator benchmarks.
+- `raptor_q_performance` includes portable real-symbol benchmarks using `VecDataOperater`.
