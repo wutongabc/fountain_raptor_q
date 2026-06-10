@@ -1,12 +1,13 @@
-﻿use crate::generators::rand_num_gen::rand;
+use crate::generators::rand_num_gen::rand;
 use crate::generators::RFC6330DegreeSet;
 use crate::RQLDPC;
 use crate::params_table;
 use fountain_engine::traits::{CodeScheme, HDPC, LDPC};
-use fountain_engine::types::{CodeParams, CodeType, DecodingConfig};
+use fountain_engine::types::{CodeParams, CodeType, DecodingConfig, SubstitutionMethod};
 use fountain_engine::{Decoder, Encoder};
 use fountain_engine::traits::DataOperator;
 use fountain_scheme::precodes::{rq_hdpc, ReversedLDPC};
+use fountain_utility::{BlockSizePolicy, PaddedDecoder, PaddedEncoder};
 
 /// RFC 6330 octet field: GF(256) with primitive polynomial `0x11D` (also [`GenericRQHDPC`](fountain_scheme::precodes::GenericRQHDPC) default).
 pub const RFC6330_GF256_PRIMITIVE_POLYNOMIAL: u16 = 0x11D;
@@ -41,6 +42,7 @@ pub struct raptor_q_main {
     params: CodeParams,
     ldpc_type: LDPCType,
     k: usize, // Store k for RFC6330DegreeSet creation
+    subs_method: SubstitutionMethod,
 }
 
 impl raptor_q_main {
@@ -79,6 +81,7 @@ impl raptor_q_main {
             params,
             ldpc_type,
             k,
+            subs_method: SubstitutionMethod::Direct,
         }
     }
 
@@ -87,24 +90,83 @@ impl raptor_q_main {
         Self::new(k, 30.min(k), LDPCType::RQLDPC)
     }
 
+    /// Override the back-substitution method used during decoding.
+    pub fn with_subs_method(mut self, subs_method: SubstitutionMethod) -> Self {
+        self.subs_method = subs_method;
+        self
+    }
+
+    /// Application source block size K (RFC 6330 source symbols).
+    pub fn source_symbols(&self) -> usize {
+        self.k
+    }
+
+    /// RFC block size K′ used internally (`CodeParams.k`).
+    pub fn block_symbols(&self) -> usize {
+        self.params.k
+    }
+
+    /// Number of implicit zero padding symbols (`K′ − K`).
+    pub fn num_padding(&self) -> usize {
+        self.block_symbols().saturating_sub(self.source_symbols())
+    }
+
     /// Creates an encoder. GF(256) is set during precoding from the HDPC `gf_poly()`.
     pub fn new_encoder(&self) -> Encoder {
-        Encoder::new(self.clone())
+        Encoder::new(self)
     }
 
     /// Creates an encoder with a data operator. Field sync uses `config_finite_field` at precoding.
     pub fn new_encoder_with_operator(&self, operator: Box<dyn DataOperator>) -> Encoder {
-        Encoder::new_with_operator(self.clone(), operator)
+        Encoder::new_with_operator(self, operator)
     }
 
     /// Creates a decoder. GF(256) is set when the system solver configures the HDPC field.
     pub fn new_decoder(&self) -> Decoder {
-        Decoder::new(self.clone())
+        Decoder::new(self)
     }
 
     /// Creates a decoder with a data operator.
     pub fn new_decoder_with_operator(&self, operator: Box<dyn DataOperator>) -> Decoder {
-        Decoder::new_with_operator(self.clone(), operator)
+        Decoder::new_with_operator(self, operator)
+    }
+
+    /// Creates a decoder with a data operator in execute-only mode (no operation log).
+    pub fn new_decoder_with_operator_execute_only(
+        &self,
+        operator: Box<dyn DataOperator>,
+    ) -> Decoder {
+        Decoder::new_with_operator_execute_only(self, operator)
+    }
+
+    /// Padding-aware encoder ([`PaddedEncoder`](fountain_utility::PaddedEncoder)); same as [`Self::new_encoder`] when `K = K′`.
+    pub fn padded_encoder(&self) -> PaddedEncoder<Self> {
+        PaddedEncoder::new(self.clone())
+    }
+
+    /// Padding-aware encoder with a data operator.
+    ///
+    /// `symbol_len` may be `0` when `K > 0` to infer from `operator.get_vector(0)`.
+    pub fn padded_encoder_with_operator(
+        &self,
+        operator: Box<dyn DataOperator>,
+        symbol_len: usize,
+    ) -> PaddedEncoder<Self> {
+        PaddedEncoder::new_with_operator(self.clone(), operator, symbol_len)
+    }
+
+    /// Padding-aware decoder ([`PaddedDecoder`](fountain_utility::PaddedDecoder)).
+    pub fn padded_decoder(&self) -> PaddedDecoder<Self> {
+        PaddedDecoder::new(self.clone())
+    }
+
+    /// Padding-aware decoder with a data operator.
+    pub fn padded_decoder_with_operator(
+        &self,
+        operator: Box<dyn DataOperator>,
+        symbol_len: usize,
+    ) -> PaddedDecoder<Self> {
+        PaddedDecoder::new_with_operator(self.clone(), operator, symbol_len)
     }
 
     fn dynamic_inactivation_budget(&self) -> usize {
@@ -112,7 +174,7 @@ impl raptor_q_main {
     }
 }
 
-/// RFC 6330 HDPC (搂5.3.3.4): 螖-column rows from the RFC `Rand` function.
+/// RFC 6330 HDPC (§5.3.3.4): Δ-column rows from the RFC `Rand` function.
 #[must_use]
 pub fn rfc6330_hdpc(h: usize) -> Box<dyn HDPC> {
     let delta_column_fn = Box::new(move |j: usize| {
@@ -157,7 +219,23 @@ impl CodeScheme for raptor_q_main {
     }
 
     fn decoding_config(&self) -> DecodingConfig {
-        DecodingConfig::default().with_max_inact_num(self.dynamic_inactivation_budget())
+        let mut config = DecodingConfig::default();
+        //config.inac_strategy = InactivationStrategy::TrailRun;
+        if self.params.k > 500 {
+            config.subs_method = SubstitutionMethod::Original;
+        }
+        config.max_inactive_num = self.dynamic_inactivation_budget();
+        config
+    }
+}
+
+impl BlockSizePolicy for raptor_q_main {
+    fn source_symbols(&self) -> usize {
+        raptor_q_main::source_symbols(self)
+    }
+
+    fn block_symbols(&self) -> usize {
+        raptor_q_main::block_symbols(self)
     }
 }
 
@@ -198,6 +276,20 @@ mod tests {
 
         let sources = degree_set_fn(0);
         assert!(!sources.is_empty());
+    }
+
+    #[test]
+    fn padding_counts_match_rfc_table() {
+        let code = raptor_q_main::new(11, 11, LDPCType::RQLDPC);
+        assert_eq!(code.source_symbols(), 11);
+        assert_eq!(code.block_symbols(), 12);
+        assert_eq!(code.num_padding(), 1);
+    }
+
+    #[test]
+    fn no_padding_when_k_equals_k_prime() {
+        let code = raptor_q_main::new(10, 10, LDPCType::RQLDPC);
+        assert_eq!(code.num_padding(), 0);
     }
 
     #[test]

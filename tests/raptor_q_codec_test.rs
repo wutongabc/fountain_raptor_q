@@ -1,4 +1,4 @@
-﻿//! RaptorQ public API compatibility tests.
+//! RaptorQ public API compatibility tests.
 //!
 //! These tests intentionally stay at the API boundary. Full round-trip coverage
 //! for larger historical failure cases lives in targeted examples so the unit

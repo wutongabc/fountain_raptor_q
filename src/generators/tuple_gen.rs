@@ -1,4 +1,4 @@
-﻿use super::degree_gen::degree_gen;
+use super::degree_gen::degree_gen;
 use super::rand_num_gen::rand;
 /// Tuple Generator for RaptorQ (RFC 6330 Section 5.3.5.4)
 ///
@@ -33,7 +33,7 @@ use super::rand_num_gen::rand;
 /// # Usage Example
 ///
 /// ```ignore
-/// use fountain_raptor_q::generators::tuple_gen;
+/// use raptor_q::generators::tuple_gen;
 ///
 /// let k = 100;  // source symbols
 /// let x = 5;    // encoding symbol ID

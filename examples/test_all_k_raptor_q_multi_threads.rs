@@ -1,4 +1,4 @@
-﻿//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330 using
+//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330 using
 //! a fixed-size worker pool.
 //!
 //! This example keeps all mutable shared state on the main thread to avoid the

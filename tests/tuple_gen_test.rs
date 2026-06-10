@@ -1,4 +1,4 @@
-﻿use fountain_raptor_q::generators::tuple_gen::generate_tuple;
+use fountain_raptor_q::generators::tuple_gen::generate_tuple;
 /// Tests for the Tuple Generator (RFC 6330 Section 5.3.5.4)
 ///
 /// This test file verifies the correct implementation of the tuple generator

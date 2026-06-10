@@ -1,4 +1,4 @@
-﻿//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330
+//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330
 //!
 //! This script tests whether systematic encoding/decoding works for all k values
 //! in the RaptorQ parameter table when using RFC 6330 degree set.
@@ -155,10 +155,10 @@ fn main() {
         let is_solvable = test_single_k(k);
 
         if is_solvable {
-            // println!("鉁?SOLVABLE");
+            // println!("✅ SOLVABLE");
             solvable_k.push(k);
         } else {
-            // println!("鉂?UNSOLVABLE");
+            // println!("❌ UNSOLVABLE");
             unsolvable_k.push(k);
         }
 

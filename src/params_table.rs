@@ -1,4 +1,4 @@
-﻿use std::sync::OnceLock;
+use std::sync::OnceLock;
 
 /// RaptorQ parameters structure
 #[derive(Debug, Clone, Copy)]

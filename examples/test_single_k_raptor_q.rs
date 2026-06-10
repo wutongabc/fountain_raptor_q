@@ -1,4 +1,4 @@
-﻿//! Simple test for a single k value with raptor_q_main
+//! Simple test for a single k value with raptor_q_main
 //!
 //! This test will panic if encoding or decoding fails.
 //! Run with: cargo run --bin test_single_k_raptor_q --release
@@ -103,13 +103,13 @@ fn main() {
     // Check if decoded
     if !decoded {
         panic!(
-            "鉂?DECODING FAILED! Used {} symbols but could not decode.",
+            "❌ DECODING FAILED! Used {} symbols but could not decode.",
             symbols_used
         );
     }
 
     println!(
-        "  鉁?Decoding successful! Used {} symbols (overhead: {})",
+        "  ✅ Decoding successful! Used {} symbols (overhead: {})",
         symbols_used,
         symbols_used as i32 - k_prime as i32
     );
@@ -122,19 +122,19 @@ fn main() {
         if decoded_vec != message_vectors[i] {
             mismatches += 1;
             if mismatches <= 5 {
-                println!("  鉂?Mismatch at vector {}", i);
+                println!("  ❌ Mismatch at vector {}", i);
             }
         }
     }
 
     if mismatches > 0 {
         panic!(
-            "鉂?DATA INTEGRITY CHECK FAILED! {} vectors don't match (out of {})",
+            "❌ DATA INTEGRITY CHECK FAILED! {} vectors don't match (out of {})",
             mismatches, k_prime
         );
     }
 
-    println!("  鉁?All {} vectors verified successfully!", k_prime);
+    println!("  ✅ All {} vectors verified successfully!", k_prime);
 
     println!("\n=== TEST PASSED ===");
     println!("k = {} is fully functional with raptor_q_main", k);

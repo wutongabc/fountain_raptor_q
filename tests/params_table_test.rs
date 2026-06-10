@@ -1,4 +1,4 @@
-﻿use fountain_raptor_q::{get_inactive_number, get_k_prime, get_params, get_systematic_index};
+use fountain_raptor_q::{get_inactive_number, get_k_prime, get_params, get_systematic_index};
 
 #[test]
 fn test_get_params() {

@@ -1,4 +1,4 @@
-﻿use fountain_engine::traits::LDPC;
+use fountain_engine::traits::LDPC;
 use fountain_engine::types::CodeParams;
 
 /// RFC 6330 LDPC pre-coding relationships.

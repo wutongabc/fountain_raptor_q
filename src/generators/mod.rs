@@ -1,4 +1,4 @@
-﻿// Degree Generator Module
+// Degree Generator Module
 //
 // This module implements the RFC 6330 degree generation algorithm.
 //
@@ -17,15 +17,15 @@
 // ```
 //
 // Where:
-// - `v` is a pseudo-random number (0 鈮?v < 2^20)
-// - `d` is found by binary search in Table 1 such that f[d-1] 鈮?v < f[d]
+// - `v` is a pseudo-random number (0 ≤ v < 2^20)
+// - `d` is found by binary search in Table 1 such that f[d-1] ≤ v < f[d]
 // - `W` is the number of intermediate symbols (from RFC 6330 parameters)
 // - `f[d]` is the cumulative distribution function value scaled to [0, 2^20)
 //
 // # Usage Example
 //
 // ```ignore
-// use fountain_raptor_q::generators::degree_gen;
+// use raptor_q::generators::degree_gen;
 //
 // // Generate degree for encoded symbol with ID 5
 // let k = 100; // source symbols

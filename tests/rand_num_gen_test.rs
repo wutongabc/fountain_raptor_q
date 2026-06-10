@@ -1,4 +1,4 @@
-﻿use fountain_raptor_q::generators::rand;
+use fountain_raptor_q::generators::rand;
 
 #[cfg(test)]
 mod tests {

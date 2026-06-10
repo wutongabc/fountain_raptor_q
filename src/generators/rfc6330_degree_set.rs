@@ -1,6 +1,6 @@
-﻿/// RFC 6330 Degree Set Generator
+/// RFC 6330 Degree Set Generator
 ///
-/// 锛乷nly generate the repair symbol degree set
+/// ！only generate the repair symbol degree set
 /// # Overview
 ///
 /// This module implements the RFC 6330 Encoding Symbol Generator (Enc[]) algorithm
@@ -102,7 +102,7 @@ use crate::params_table;
 /// # Example
 ///
 /// ```ignore
-/// use fountain_raptor_q::RFC6330DegreeSet;
+/// use raptor_q::RFC6330DegreeSet;
 ///
 /// let k = 100;
 /// let mut degree_set = RFC6330DegreeSet::new(k);

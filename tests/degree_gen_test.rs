@@ -1,4 +1,4 @@
-﻿#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use fountain_raptor_q::generators::degree_gen;
 

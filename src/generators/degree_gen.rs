@@ -1,4 +1,4 @@
-﻿// Cumulative Distribution Function (CDF) table for RFC 6330 degree distribution
+// Cumulative Distribution Function (CDF) table for RFC 6330 degree distribution
 // This is Table 1 from RFC 6330: Soliton-like degree distribution
 // Each f[d] is the cumulative probability scaled to [0, 2^20) = [0, 1048576)
 //
@@ -18,9 +18,9 @@
 // ================
 // const DEGREE_CDF_TABLE: &[u32] = &[
 //     0,           // f[0] = 0
-//     110427,      // f[1] 鈮?0.1053 * 2^20
-//     220854,      // f[2] 鈮?0.2106 * 2^20
-//     331281,      // f[3] 鈮?0.3158 * 2^20
+//     110427,      // f[1] ≈ 0.1053 * 2^20
+//     220854,      // f[2] ≈ 0.2106 * 2^20
+//     331281,      // f[3] ≈ 0.3158 * 2^20
 //     // ... more values ...
 //     1048576,     // f[n] = 2^20 (final value, representing 100% probability)
 // ];

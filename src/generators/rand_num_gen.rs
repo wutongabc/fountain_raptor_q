@@ -1,4 +1,4 @@
-﻿/// Random number generator as specified in RFC 6330 Section 5.3.5.1
+/// Random number generator as specified in RFC 6330 Section 5.3.5.1
 ///
 /// Generates a random number using the formula:
 /// Rand[y, i, m] = (V0[x0] ^ V1[x1] ^ V2[x2] ^ V3[x3]) % m
