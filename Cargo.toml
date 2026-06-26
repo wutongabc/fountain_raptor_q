@@ -24,9 +24,9 @@ include = [
 ]
 
 [dependencies]
-fountain_engine = "1.3.1"
+fountain_engine = "1.3.2"
 fountain_scheme = "1.3.0"
-fountain_utility = "1.3.0"
+fountain_utility = "1.3.1"
 csv = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8.5"

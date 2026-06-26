@@ -1,4 +1,5 @@
 use crate::RQLDPC;
+use crate::RQHDPC;
 use crate::generators::RFC6330DegreeSet;
 use crate::generators::rand_num_gen::rand;
 use crate::params_table;
@@ -29,6 +30,23 @@ impl LDPCType {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum HDPCType {
+    RQHDPC,
+    CodeSchemeRQHDPC,
+}
+
+impl HDPCType {
+    fn create(&self, params: &CodeParams) -> Box<dyn HDPC> {
+        let h = params.h;
+        let delta = rfc6330_delta_fn(h);
+        match self {
+            HDPCType::RQHDPC => Box::new(RQHDPC::new(delta)),
+            HDPCType::CodeSchemeRQHDPC => rq_hdpc(delta),
+        }
+    }
+}
+
 /// RaptorQ Systematic Code with RFC 6330 Degree Set
 ///
 /// This struct provides a systematic fountain code implementation using RaptorQ parameters,
@@ -41,6 +59,8 @@ impl LDPCType {
 pub struct raptor_q_main {
     params: CodeParams,
     ldpc_type: LDPCType,
+    hdpc_type: HDPCType,
+    code_type: CodeType,
     k: usize, // Store k for RFC6330DegreeSet creation
     subs_method: Option<SubstitutionMethod>,
 }
@@ -80,6 +100,8 @@ impl raptor_q_main {
         Self {
             params,
             ldpc_type,
+            hdpc_type: HDPCType::RQHDPC,  //也就是说HDPC默认使用RFC 6330的Δ-column生成方式
+            code_type: CodeType::Systematic, // 默认使用系统码
             k,
             subs_method: None,
         }
@@ -93,6 +115,18 @@ impl raptor_q_main {
     /// Override the back-substitution method used during decoding.
     pub fn with_subs_method(mut self, subs_method: SubstitutionMethod) -> Self {
         self.subs_method = Some(subs_method);
+        self
+    }
+
+    /// Override the code type (default is [`CodeType::Systematic`](fountain_engine::types::CodeType::Systematic)).
+    pub fn with_code_type(mut self, code_type: CodeType) -> Self {
+        self.code_type = code_type;
+        self
+    }
+
+    /// Override the HDPC type (default is [`HDPCType::RQHDPC`](HDPCType::RQHDPC)).
+    pub fn with_hdpc_type(mut self, hdpc_type: HDPCType) -> Self {
+        self.hdpc_type = hdpc_type;
         self
     }
 
@@ -174,14 +208,19 @@ impl raptor_q_main {
     }
 }
 
-/// RFC 6330 HDPC (§5.3.3.4): Δ-column rows from the RFC `Rand` function.
-#[must_use]
-pub fn rfc6330_hdpc(h: usize) -> Box<dyn HDPC> {
-    let delta_column_fn = Box::new(move |j: usize| {
+/// RFC 6330 §5.3.3.4 Δ-matrix column generator (shared by both HDPC paths).
+fn rfc6330_delta_fn(h: usize) -> Box<dyn Fn(usize) -> Vec<usize>> {
+    Box::new(move |j| {
         let r1 = rand((j + 1) as u32, 6, h as u32) as usize;
         let r2 = (r1 + rand((j + 1) as u32, 7, (h - 1) as u32) as usize + 1) % h;
         vec![r1, r2]
-    });
+    })
+}
+
+/// RFC 6330 HDPC (§5.3.3.4): Δ-column rows from the RFC `Rand` function.
+#[must_use]
+pub fn rfc6330_hdpc(h: usize) -> Box<dyn HDPC> {
+    let delta_column_fn = rfc6330_delta_fn(h);
     rq_hdpc(delta_column_fn)
 }
 
@@ -191,7 +230,7 @@ impl CodeScheme for raptor_q_main {
     }
 
     fn code_type(&self) -> CodeType {
-        CodeType::Systematic
+        self.code_type
     }
 
     fn create_degree_set_fn(&self) -> Box<dyn FnMut(usize) -> Vec<usize>> {
@@ -208,7 +247,7 @@ impl CodeScheme for raptor_q_main {
         let hdpc = if self.params.h == 0 {
             None
         } else {
-            Some(rfc6330_hdpc(self.params.h))
+            Some(self.hdpc_type.create(&self.params))
         };
         let ldpc = if self.params.l == 0 {
             None
@@ -257,6 +296,21 @@ mod tests {
         assert!(code.get_params().h > 0);
         assert!(code.get_params().l > 0);
         assert_eq!(code.code_type(), CodeType::Systematic);
+    }
+
+    #[test]
+    fn test_raptorq_ord_rfc6330_creation() {
+        let k = 50;
+        let dmax = 30;
+        let ldpc_type = LDPCType::ReversedLDPC;
+
+        let code = raptor_q_main::new(k, dmax, ldpc_type)
+            .with_code_type(CodeType::Ordinary);
+
+        assert!(code.get_params().k >= k);
+        assert!(code.get_params().h > 0);
+        assert!(code.get_params().l > 0);
+        assert_eq!(code.code_type(), CodeType::Ordinary);
     }
 
     #[test]
