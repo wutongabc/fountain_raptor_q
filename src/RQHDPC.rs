@@ -1,22 +1,24 @@
 ﻿use fountain_engine::DataManager;
-use fountain_engine::algebra::finite_field::{GF2, GF256};
-use fountain_engine::algebra::linear_algebra::{Vector, Matrix};
+use fountain_engine::algebra::finite_field::GF256;
+// use fountain_engine::algebra::finite_field::{GF2, GF256};
+// use fountain_engine::algebra::linear_algebra::{Vector, Matrix};
 use fountain_engine::traits::{HDPC, LDPC};
 use fountain_engine::types::CodeParams;
 use fountain_scheme::precodes::GenericRQHDPC;
-use std::cell::RefCell;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 pub struct RQHDPC {
     inner: GenericRQHDPC,
-    cached_lu: RefCell<Option<(Vec<usize>, Vec<Vec<u8>>)>>, 
+    cached_lu: Arc<OnceLock<(CodeParams, Vec<usize>, Vec<Vec<u8>>)>>, 
 }
 
 impl RQHDPC {
     #[must_use]
-    pub fn new(delta_column_fn: Box<dyn Fn(usize) -> Vec<usize>>) -> Self {
+    pub fn new(delta_column_fn: Box<dyn Fn(usize) -> Vec<usize>>, cache: Arc<OnceLock<(CodeParams, Vec<usize>, Vec<Vec<u8>>)>>) -> Self {
         Self {
             inner: GenericRQHDPC::new(delta_column_fn),
-            cached_lu: RefCell::new(None),
+            cached_lu: cache,
         }
     }
 
@@ -82,12 +84,18 @@ impl HDPC for RQHDPC {
         params: &CodeParams,
         ldpc: &dyn LDPC,
     ) -> (Vec<usize>, Vec<Vec<u8>>) {
-        if let Some(ref cached) = *self.cached_lu.borrow() {
-            return cached.clone();
+        if let Some(cached) = self.cached_lu.get() {
+            if cached.0.k == params.k
+                && cached.0.a == params.a
+                && cached.0.l == params.l
+                && cached.0.h == params.h {
+                return (cached.1.clone(), cached.2.clone());
+            }
         }
 
         let (p, m) = self.inner.lu_idssh(gf, params, ldpc);
-        *self.cached_lu.borrow_mut() = Some((p.clone(), m.clone()));
+
+        let _ = self.cached_lu.set((params.clone(), p.clone(), m.clone())); //如果为空，则设置缓存，如果不为空，则不设置，返回Err(value)
 
         // let sh_column = |row: usize| {
         //     ldpc.inactive_row(row)
@@ -110,7 +118,7 @@ impl HDPC for RQHDPC {
 
         // // 第二步：稀疏路径满秩 → 直接缓存返回
         // if r == params.h {
-        //     *self.cached_lu.borrow_mut() = Some((p.clone(), m.clone()));
+        //     *self.cached_lu.borrow_mut() = Some((params.clone(), p.clone(), m.clone()));
         //     return (p, m);
         // }
 

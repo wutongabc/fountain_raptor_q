@@ -9,6 +9,8 @@ use fountain_engine::types::{CodeParams, CodeType, DecodingConfig, SubstitutionM
 use fountain_engine::{Decoder, Encoder};
 use fountain_scheme::precodes::{ReversedLDPC, rq_hdpc};
 use fountain_utility::{BlockSizePolicy, PaddedDecoder, PaddedEncoder};
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 /// RFC 6330 octet field: GF(256) with primitive polynomial `0x11D` (also [`GenericRQHDPC`](fountain_scheme::precodes::GenericRQHDPC) default).
 pub const RFC6330_GF256_PRIMITIVE_POLYNOMIAL: u16 = 0x11D;
@@ -37,11 +39,11 @@ pub enum HDPCType {
 }
 
 impl HDPCType {
-    fn create(&self, params: &CodeParams) -> Box<dyn HDPC> {
+    fn create(&self, params: &CodeParams, cache: Arc<OnceLock<(CodeParams, Vec<usize>, Vec<Vec<u8>>)>>) -> Box<dyn HDPC> {
         let h = params.h;
         let delta = rfc6330_delta_fn(h);
         match self {
-            HDPCType::RQHDPC => Box::new(RQHDPC::new(delta)),
+            HDPCType::RQHDPC => Box::new(RQHDPC::new(delta, cache)),
             HDPCType::CodeSchemeRQHDPC => rq_hdpc(delta),
         }
     }
@@ -63,6 +65,7 @@ pub struct raptor_q_main {
     code_type: CodeType,
     k: usize, // Store k for RFC6330DegreeSet creation
     subs_method: Option<SubstitutionMethod>,
+    cached_hdpc_lu: Arc<OnceLock<(CodeParams,Vec<usize>, Vec<Vec<u8>>)>>, // Cache for LU decomposition
 }
 
 impl raptor_q_main {
@@ -104,6 +107,7 @@ impl raptor_q_main {
             code_type: CodeType::Systematic, // 默认使用系统码
             k,
             subs_method: None,
+            cached_hdpc_lu: Arc::new(OnceLock::new()), // Initialize the LU cache
         }
     }
 
@@ -247,7 +251,7 @@ impl CodeScheme for raptor_q_main {
         let hdpc = if self.params.h == 0 {
             None
         } else {
-            Some(self.hdpc_type.create(&self.params))
+            Some(self.hdpc_type.create(&self.params, self.cached_hdpc_lu.clone()))
         };
         let ldpc = if self.params.l == 0 {
             None
