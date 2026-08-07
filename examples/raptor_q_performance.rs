@@ -57,7 +57,7 @@
 
 use fountain_engine::CodeScheme;
 use fountain_engine::traits::DataOperator;
-use fountain_engine::types::DecodeStatus;
+use fountain_engine::types::{CodeType, DecodeStatus};
 use fountain_raptor_q::{
     PARAMS_CSV, RFC6330_GF256_PRIMITIVE_POLYNOMIAL, RaptorQDecoder, RaptorQEncoder,
     RaptorQRealSymbolSession, raptor_q_main::raptor_q_main,
@@ -82,6 +82,8 @@ const REAL_SYMBOL_SIZES: &[usize] = &[128, 1500];
 const REAL_SYMBOL_RUNS: usize = 5;
 const OVERHEAD_NUMERATOR: usize = 3;
 const OVERHEAD_DENOMINATOR: usize = 2;
+/// 改这一个值就能切换全文件的编码模式
+const CODE_TYPE: CodeType = CodeType::Ordinary; // CodeType::Ordinary; // CodeType::Systematic
 
 struct ExperimentStats {
     success_rate: f64,
@@ -140,7 +142,7 @@ fn vec_operator_factory(symbol_size: usize) -> Box<dyn fountain_engine::DataOper
 
 /// One on-the-fly roundtrip with message bytes via padded [`RaptorQEncoder`]/[`RaptorQDecoder`].
 fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
-    let code = raptor_q_main::new_with_default_setting(k);
+    let code = raptor_q_main::new_with_default_setting(k).with_code_type(CODE_TYPE);
     let source_k = code.source_symbols();
 
     let messages = make_test_messages(source_k, SYMBOL_SIZE);
@@ -153,9 +155,21 @@ fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
     let mut encoder =
         RaptorQEncoder::new_with_operator(code.clone(), Box::new(enc_op), SYMBOL_SIZE);
     let params = code.get_params();
-    let mut coded_ids: Vec<usize> = (0..source_k).collect();
-    coded_ids.extend(params.num_total()..params.num_total() + num_coded.saturating_sub(source_k));
-
+    // let mut coded_ids: Vec<usize> = (0..source_k).collect();
+    // coded_ids.extend(params.num_total()..params.num_total() + num_coded.saturating_sub(source_k));
+    let coded_ids: Vec<usize> = match CODE_TYPE {
+        CodeType::Systematic => {
+            let mut ids: Vec<usize> = (0..source_k).collect();
+            ids.extend(
+                params.num_total()..params.num_total() + num_coded.saturating_sub(source_k),
+            );
+            ids
+        }
+        CodeType::Ordinary => {
+            (params.num_total()..params.num_total() + num_coded).collect()
+        }
+    };
+    
     let mut coded_payload = Vec::new();
     for &coded_id in &coded_ids {
         if let Some(data_id) = encoder.encode_coded_vector(coded_id) {
@@ -195,14 +209,28 @@ fn verify_with_data_operator(k: usize, num_coded: usize) -> Result<(), String> {
 
 fn print_real_symbol_benchmarks() {
     let num_coded = num_coded_vectors(REAL_SYMBOL_K);
-    let code = raptor_q_main::new_with_default_setting(REAL_SYMBOL_K);
+    let code = raptor_q_main::new_with_default_setting(REAL_SYMBOL_K).with_code_type(CODE_TYPE);
     let source_k = code.source_symbols();
+    let params = code.get_params();     // Ordinary更改
     let session = RaptorQRealSymbolSession;
 
     let bench_config = |symbol_size: usize| {
-        RealSymbolBenchConfig::new(&code, source_k, symbol_size, num_coded)
-            .with_field_pp(RFC6330_GF256_PRIMITIVE_POLYNOMIAL)
-    };
+        match CODE_TYPE {
+            CodeType::Systematic => {
+                RealSymbolBenchConfig::new(&code, source_k, symbol_size, num_coded)
+                    .with_field_pp(RFC6330_GF256_PRIMITIVE_POLYNOMIAL)
+            }
+            CodeType::Ordinary => {
+                RealSymbolBenchConfig {
+                    source_k,
+                    symbol_size,
+                    // Ordinary情况：coded_ids全部 ESI 从 num_total() 开始取，避开 encoder 拒绝范围
+                    coded_ids: (params.num_total()..params.num_total() + num_coded).collect(),
+                    field_pp: RFC6330_GF256_PRIMITIVE_POLYNOMIAL,
+                }
+            }
+        }
+    };    
 
     print_real_symbol_benchmark_table(
         &format!("Real-symbol benchmark (G3.4 / G3.3, K={REAL_SYMBOL_K}, padded codec)"),
@@ -228,7 +256,7 @@ fn print_real_symbol_benchmarks() {
 
 /// Generic harness (no padding symbols). Use when `K = K′`.
 fn verify_with_generic_harness(k: usize, num_coded: usize) -> Result<(), String> {
-    let code = raptor_q_main::new_with_default_setting(k);
+    let code = raptor_q_main::new_with_default_setting(k).with_code_type(CODE_TYPE);
     if code.num_padding() > 0 {
         return verify_with_data_operator(k, num_coded);
     }
@@ -271,6 +299,7 @@ fn main() -> std::io::Result<()> {
         "Runs per K: {NUM_RUNS}, coded vectors: k * {OVERHEAD_NUMERATOR}/{OVERHEAD_DENOMINATOR}"
     );
     println!("Test all K from parameter table: {TEST_ALL_K}");
+    println!("Code type: {:?}", CODE_TYPE);
     println!("\n{header}");
     println!("{}", "-".repeat(110));
 
@@ -305,7 +334,7 @@ fn main() -> std::io::Result<()> {
         }
 
         let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            let code = raptor_q_main::new_with_default_setting(k);
+            let code = raptor_q_main::new_with_default_setting(k).with_code_type(CODE_TYPE);
             if code.num_padding() > 0 {
                 return Err("generic benchmark requires K = K′ (num_padding > 0)".to_string());
             }
