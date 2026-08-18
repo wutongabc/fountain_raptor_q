@@ -1,6 +1,6 @@
 [package]
 name = "fountain_raptor_q"
-version = "1.2.0"
+version = "2.0.0"
 edition = "2024"
 authors = ["Zigeng Xu", "Shenghao Yang"]
 license = "MIT"
@@ -16,6 +16,8 @@ include = [
     "examples/test_all_k_raptor_q.rs",
     "examples/test_all_k_raptor_q_multi_threads.rs",
     "examples/raptor_q_performance.rs",
+    "examples/code_type_performance.rs",
+    "examples/hdpc_cache_performance.rs",
     "tests/**",
     "Cargo.toml",
     "README.md",
@@ -49,3 +51,11 @@ path = "examples/test_all_k_raptor_q_multi_threads.rs"
 [[example]]
 name = "raptor_q_performance"
 path = "examples/raptor_q_performance.rs"
+
+[[example]]
+name = "code_type_performance"
+path = "examples/code_type_performance.rs"
+
+[[example]]
+name = "hdpc_cache_performance"
+path = "examples/hdpc_cache_performance.rs"

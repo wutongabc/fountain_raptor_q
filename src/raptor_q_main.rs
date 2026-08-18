@@ -287,6 +287,15 @@ impl BlockSizePolicy for raptor_q_main {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fountain_engine::algebra::finite_field::GF256;
+
+    fn hdpc_lu(code: &raptor_q_main) -> (Vec<usize>, Vec<Vec<u8>>) {
+        let params = code.get_params();
+        let (hdpc, ldpc) = code.create_precode();
+        let hdpc = hdpc.expect("RaptorQ must provide HDPC");
+        let ldpc = ldpc.expect("RaptorQ must provide LDPC");
+        hdpc.lu_idssh(Some(&GF256::default()), &params, ldpc.as_ref())
+    }
 
     #[test]
     fn test_raptorq_sys_rfc6330_creation() {
@@ -374,6 +383,51 @@ mod tests {
 
         assert!(hdpc.is_some());
         assert!(ldpc.is_some());
+    }
+
+    #[test]
+    fn cached_hdpc_lu_matches_uncached_hdpc_lu() {
+        let cached_code = raptor_q_main::new_with_default_setting(1_000);
+        let uncached_code = cached_code
+            .clone()
+            .with_hdpc_type(HDPCType::CodeSchemeRQHDPC);
+
+        let first = hdpc_lu(&cached_code);
+        assert!(cached_code.cached_hdpc_lu.get().is_some());
+        let second = hdpc_lu(&cached_code);
+        let uncached = hdpc_lu(&uncached_code);
+
+        assert_eq!(first, second);
+        assert_eq!(first, uncached);
+    }
+
+    #[test]
+    fn cloned_scheme_shares_hdpc_lu_cache() {
+        let code = raptor_q_main::new_with_default_setting(1_000);
+        let cloned = code.clone();
+        assert!(Arc::ptr_eq(&code.cached_hdpc_lu, &cloned.cached_hdpc_lu));
+
+        let expected = hdpc_lu(&code);
+        assert!(cloned.cached_hdpc_lu.get().is_some());
+        assert_eq!(hdpc_lu(&cloned), expected);
+    }
+
+    #[test]
+    fn concurrent_clones_share_a_valid_hdpc_lu_cache() {
+        let code = raptor_q_main::new_with_default_setting(5_008);
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cloned = code.clone();
+                std::thread::spawn(move || hdpc_lu(&cloned))
+            })
+            .collect();
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("cache worker panicked"))
+            .collect();
+        assert!(code.cached_hdpc_lu.get().is_some());
+        assert!(results.windows(2).all(|pair| pair[0] == pair[1]));
     }
 
     #[test]

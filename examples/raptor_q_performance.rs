@@ -4,6 +4,16 @@
 //! [`VecDataOperater`](fountain_utility::VecDataOperater)) to verify encode/decode
 //! correctness, then [`test_code_scheme_multiple`] for operation-count and timing stats.
 //!
+//! Run the original full benchmark with the file-wide [`CODE_TYPE`] setting:
+//!
+//! ```text
+//! cargo run --release --locked --example raptor_q_performance
+//! ```
+//!
+//! Change [`CODE_TYPE`] to run that benchmark in systematic or ordinary mode.
+//! For an automatic side-by-side comparison, use the separate
+//! `code_type_performance` example documented in the README.
+//!
 //! ## Default K values
 //!
 //! RFC 6330 table **K′** with **K = K′** (no padding): `10, 101, 200, 511, 1002, 2005, 5008`.
@@ -82,8 +92,8 @@ const REAL_SYMBOL_SIZES: &[usize] = &[128, 1500];
 const REAL_SYMBOL_RUNS: usize = 5;
 const OVERHEAD_NUMERATOR: usize = 3;
 const OVERHEAD_DENOMINATOR: usize = 2;
-/// 改这一个值就能切换全文件的编码模式
-const CODE_TYPE: CodeType = CodeType::Ordinary; // CodeType::Ordinary; // CodeType::Systematic
+/// 改这一个值就能切换全文件的编码模式。
+const CODE_TYPE: CodeType = CodeType::Systematic; // CodeType::Ordinary; // CodeType::Systematic
 
 struct ExperimentStats {
     success_rate: f64,

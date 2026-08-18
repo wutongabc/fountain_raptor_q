@@ -58,6 +58,54 @@ fn padded_round_trip_k_smaller_than_k_prime() {
 }
 
 #[test]
+fn ordinary_padded_round_trip_k_smaller_than_k_prime() {
+    let source_k = 11;
+    let t = 16;
+    let code = raptor_q_main::new(source_k, 30, LDPCType::RQLDPC)
+        .with_code_type(CodeType::Ordinary);
+    assert!(code.num_padding() > 0, "test needs K < K′ from RFC table");
+
+    let mut messages = vec![vec![0u8; t]; source_k];
+    for (i, row) in messages.iter_mut().enumerate() {
+        for (j, byte) in row.iter_mut().enumerate() {
+            *byte = ((i * 7 + j * 11) % 251) as u8;
+        }
+    }
+
+    let mut enc_op = VecDataOperater::new(t);
+    for (i, message) in messages.iter().enumerate() {
+        enc_op.insert_vector(message, i);
+    }
+
+    let params = code.get_params();
+    let first_ordinary_esi = params.num_total();
+    let mut encoder = RaptorQEncoder::new_with_operator(code.clone(), Box::new(enc_op), t);
+    let mut packets = Vec::new();
+    for esi in first_ordinary_esi..first_ordinary_esi + 2 * source_k {
+        let data_id = encoder
+            .encode_coded_vector(esi)
+            .unwrap_or_else(|| panic!("ordinary ESI {esi} should be encodable"));
+        packets.push((esi, encoder.get_data_vector(data_id).to_vec()));
+    }
+
+    let mut decoder = RaptorQDecoder::new_with_operator(
+        code,
+        Box::new(VecDataOperater::new(t)),
+        t,
+    );
+    for (esi, payload) in packets {
+        if decoder.add_coded_vector(esi, &payload) == DecodeStatus::Decoded {
+            break;
+        }
+    }
+
+    assert_eq!(decoder.decode_status(), DecodeStatus::Decoded);
+    for (source_id, expected) in messages.iter().enumerate() {
+        assert_eq!(decoder.get_data_vector(source_id), expected.as_slice());
+    }
+}
+
+#[test]
 fn encoder_new_without_external_operator_when_k_less_than_k_prime() {
     let code = raptor_q_main::new(11, 30, LDPCType::RQLDPC);
     assert!(code.num_padding() > 0);

@@ -1,16 +1,18 @@
-//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330 using
-//! a fixed-size worker pool.
+//! Test all k values in raptor_q_para.csv with a fixed-size worker pool.
 //!
 //! This example keeps all mutable shared state on the main thread to avoid the
 //! usual multi-threading pitfalls: workers only claim the next k index, run an
 //! isolated test, and send the result back through a channel.
+//! The worker helper supports both code types; `main` currently passes
+//! [`CodeType::Ordinary`] explicitly. Change that call to [`CodeType::Systematic`]
+//! only when a systematic all-K run is intended.
 //!
 //! Run with:
-//! `cargo run --example test_all_k_raptor_q_multi_threads --release`
+//! `cargo run --release --locked --example test_all_k_raptor_q_multi_threads`
 
 use fountain_engine::*;
 use fountain_utility::VecDataOperater;
-use fountain_raptor_q::{LDPCType, HDPCType, raptor_q_main::raptor_q_main};
+use fountain_raptor_q::{LDPCType, raptor_q_main::raptor_q_main};
 use std::io::{self, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::process;
@@ -21,8 +23,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-//const NUMBER_OF_K_TO_TEST: usize = 477;
-const NUMBER_OF_K_TO_TEST: usize = 420;
+const NUMBER_OF_K_TO_TEST: usize = 477;
 const NUMBER_OF_THREADS: usize = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,7 +41,7 @@ struct WorkerResult {
     duration: Duration,
 }
 
-/// Test a single k value with systematic encoding/decoding.
+/// Test a single k value with the requested encoding/decoding mode.
 fn test_single_k(k: usize, code_type: CodeType) -> bool {
     let symbol_size = 4;
 
@@ -66,7 +67,6 @@ fn test_single_k(k: usize, code_type: CodeType) -> bool {
 
         let total_num = params.num_total();
         let num_repair = k_prime / 2;
-        // let num_repair = k_prime;
 
         match code_type {
             CodeType::Systematic => {
