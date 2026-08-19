@@ -1,12 +1,14 @@
-//! Test all k values in raptor_q_para.csv with RaptorQSysCodeRFC6330 using
-//! a fixed-size worker pool.
+//! Test all k values in raptor_q_para.csv with a fixed-size worker pool.
 //!
 //! This example keeps all mutable shared state on the main thread to avoid the
 //! usual multi-threading pitfalls: workers only claim the next k index, run an
 //! isolated test, and send the result back through a channel.
+//! The worker helper supports both code types; `main` currently passes
+//! [`CodeType::Ordinary`] explicitly. Change that call to [`CodeType::Systematic`]
+//! only when a systematic all-K run is intended.
 //!
 //! Run with:
-//! `cargo run --example test_all_k_raptor_q_multi_threads --release`
+//! `cargo run --release --locked --example test_all_k_raptor_q_multi_threads`
 
 use fountain_engine::*;
 use fountain_utility::VecDataOperater;
@@ -39,11 +41,12 @@ struct WorkerResult {
     duration: Duration,
 }
 
-/// Test a single k value with systematic encoding/decoding.
-fn test_single_k(k: usize) -> bool {
+/// Test a single k value with the requested encoding/decoding mode.
+fn test_single_k(k: usize, code_type: CodeType) -> bool {
     let symbol_size = 4;
 
-    let config = raptor_q_main::new(k, 30, LDPCType::RQLDPC);
+    let config = raptor_q_main::new(k, 30, LDPCType::RQLDPC)
+        .with_code_type(code_type);
     let params = config.get_params();
     let k_prime = params.k;
 
@@ -60,16 +63,25 @@ fn test_single_k(k: usize) -> bool {
     }
 
     let encoder_result = panic::catch_unwind(AssertUnwindSafe(|| {
-    let mut encoder = config.new_encoder_with_operator(Box::new(vec_data_operater));
-
-        for coded_id in 0..k_prime {
-            encoder.encode_coded_vector(coded_id);
-        }
+        let mut encoder = config.new_encoder_with_operator(Box::new(vec_data_operater));
 
         let total_num = params.num_total();
         let num_repair = k_prime / 2;
-        for coded_id in total_num..total_num + num_repair {
-            encoder.encode_coded_vector(coded_id);
+
+        match code_type {
+            CodeType::Systematic => {
+                for coded_id in 0..k_prime {
+                    encoder.encode_coded_vector(coded_id);
+                }
+                for coded_id in total_num..total_num + num_repair {
+                    encoder.encode_coded_vector(coded_id);
+                }
+            }
+            CodeType::Ordinary => {
+                for coded_id in total_num..total_num + k_prime + num_repair {
+                    encoder.encode_coded_vector(coded_id);
+                }
+            }
         }
 
         (encoder, total_num, num_repair)
@@ -85,24 +97,35 @@ fn test_single_k(k: usize) -> bool {
     let mut decoder = config.new_decoder_with_operator(Box::new(VecDataOperater::new(symbol_size)));
 
     let mut decoded = false;
-    for coded_id in 0..k_prime {
-        let coded_vector = encoder.manager.get_coded_vector(coded_id);
-        let status = decoder.add_coded_vector(coded_id, &coded_vector);
-
-        if let DecodeStatus::Decoded = status {
-            decoded = true;
-            break;
+    match code_type {
+        CodeType::Systematic => {
+            for coded_id in 0..k_prime {
+                let coded_vector = encoder.manager.get_coded_vector(coded_id);
+                let status = decoder.add_coded_vector(coded_id, &coded_vector);
+                if let DecodeStatus::Decoded = status {
+                    decoded = true;
+                    break;
+                }
+            }
+            if !decoded {
+                for coded_id in total_num..total_num + num_repair {
+                    let coded_vector = encoder.manager.get_coded_vector(coded_id);
+                    let status = decoder.add_coded_vector(coded_id, &coded_vector);
+                    if let DecodeStatus::Decoded = status {
+                        decoded = true;
+                        break;
+                    }
+                }
+            }
         }
-    }
-
-    if !decoded {
-        for coded_id in total_num..total_num + num_repair {
-            let coded_vector = encoder.manager.get_coded_vector(coded_id);
-            let status = decoder.add_coded_vector(coded_id, &coded_vector);
-
-            if let DecodeStatus::Decoded = status {
-                decoded = true;
-                break;
+        CodeType::Ordinary => {
+            for coded_id in total_num..total_num + k_prime + num_repair {
+                let coded_vector = encoder.manager.get_coded_vector(coded_id);
+                let status = decoder.add_coded_vector(coded_id, &coded_vector);
+                if let DecodeStatus::Decoded = status {
+                    decoded = true;
+                    break;
+                }
             }
         }
     }
@@ -154,6 +177,7 @@ fn main() {
 
         let handle = thread::Builder::new()
             .name(format!("k-worker-{worker_id}"))
+            .stack_size(8 * 1024 * 1024)  // 增加的线程栈大小为 8 MB
             .spawn(move || {
                 loop {
                     let index = next_index.fetch_add(1, Ordering::Relaxed);
@@ -163,7 +187,7 @@ fn main() {
 
                     let k = shared_k_values[index];
                     let test_started = Instant::now();
-                    let status = match panic::catch_unwind(AssertUnwindSafe(|| test_single_k(k))) {
+                    let status = match panic::catch_unwind(AssertUnwindSafe(|| test_single_k(k, CodeType::Ordinary))) {
                         Ok(true) => TestStatus::Solvable,
                         Ok(false) => TestStatus::Unsolvable,
                         Err(_) => TestStatus::Panicked,

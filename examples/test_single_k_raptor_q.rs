@@ -1,7 +1,8 @@
 //! Simple test for a single k value with raptor_q_main
 //!
 //! This test will panic if encoding or decoding fails.
-//! Run with: cargo run --bin test_single_k_raptor_q --release
+//! Change `k` below to select the case, then run:
+//! `cargo run --release --locked --example test_single_k_raptor_q`
 
 use fountain_engine::*;
 use fountain_utility::VecDataOperater;

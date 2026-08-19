@@ -7,6 +7,38 @@ RFC 6330 parameters, degree generation, LDPC relationships, and RFC octet-field
 HDPC arithmetic. It is designed to be used with the generic `Encoder` and
 `Decoder` types from `fountain_engine`.
 
+## New in 2.0: Migrating from the 1.x Fountain Stack
+
+> **Breaking dependency migration:** `fountain_raptor_q` 2.0 uses
+> `fountain_engine` 2.x, `fountain_scheme` 2.x, and `fountain_utility` 2.x.
+> Applications upgrading from `fountain_raptor_q` 1.x should update the
+> Fountain crates together.
+
+The major-version update is required because this crate's public API accepts
+and returns Fountain types such as `CodeType`, `SubstitutionMethod`, `Encoder`,
+`Decoder`, `DataOperator`, and the padding wrappers. Rust treats a type from
+`fountain_engine` 1.x as different from the same-named type in
+`fountain_engine` 2.x, so mixing the two generations can produce type-mismatch
+errors.
+
+Update direct dependencies as a set:
+
+```toml
+# Before: fountain_raptor_q 1.x
+fountain_raptor_q = "1.2"
+fountain_engine = "1.3"
+fountain_utility = "1.3"
+
+# After: fountain_raptor_q 2.x
+fountain_raptor_q = "2.0"
+fountain_engine = "2.0"
+fountain_utility = "2.0"
+```
+
+If the application directly uses `fountain_scheme`, update it to 2.x as well.
+After the dependency update, rebuild the application so all public Fountain
+types come from the same major-version family.
+
 ## Quick Start
 
 Add the crate to your project. `fountain_utility` is optional, but it provides
@@ -14,9 +46,9 @@ the in-memory `VecDataOperater` used in the example below.
 
 ```toml
 [dependencies]
-fountain_raptor_q = "1.1"
-fountain_engine = "1.2"
-fountain_utility = "1.1"
+fountain_raptor_q = "2.0"
+fountain_engine = "2.0"
+fountain_utility = "2.0"
 ```
 
 Create a RaptorQ systematic code scheme:
@@ -131,6 +163,70 @@ fn main() {
   `fountain_engine` variable layout.
 - Examples for full K-table validation, single-K smoke tests, and performance
   experiments.
+
+## Ordinary (Non-Systematic) Encoding
+
+The default remains systematic encoding. Select ordinary encoding explicitly
+with `with_code_type(CodeType::Ordinary)`:
+
+```rust
+use fountain_engine::{CodeScheme, CodeType};
+use fountain_raptor_q::raptor_q_main::raptor_q_main;
+
+let code = raptor_q_main::new_with_default_setting(100)
+    .with_code_type(CodeType::Ordinary);
+let params = code.get_params();
+
+// Ordinary packets are LT symbols. Their ESI range starts after all source and
+// precode symbols; IDs below this boundary are not ordinary output packets.
+let first_ordinary_esi = params.num_total();
+assert!(first_ordinary_esi > params.k);
+```
+
+For systematic encoding, source-symbol ESIs are `0..K` and repair ESIs start
+at `params.num_total()`. For ordinary encoding, all transmitted ESIs start at
+`params.num_total()`.
+
+## Ordinary Encoder Cache Benchmark
+
+The HDPC LU cache is used by ordinary precoding, not by the normal systematic
+encoding path. Run the standalone benchmark through the complete ordinary
+encoder and decoder workflow:
+
+```bash
+cargo run --release --locked --example hdpc_cache_performance
+```
+
+The example compares an uncached encoder, a fresh cached encoder, and repeated
+encoders sharing a warmed cache. It reports both full precoding time and total
+encoding time, and every measurement performs a complete decode and verifies
+the recovered source data; it never calls `HDPC::lu_idssh` directly. Measurements
+use `CodeType::Ordinary`, 128-byte symbols, and `2 * K′` LT packets. Each value
+below is the median of five benchmark executions, each containing five verified
+round trips (2026-08-19). Speedup is `uncached / warm`.
+
+| K | Uncached precoding | Warm precoding | Precoding speedup | Uncached total encoding | Warm total encoding | Total speedup |
+|---:|---:|---:|---:|---:|---:|---:|
+| 100 | 0.735 ms | 0.721 ms | 1.02x | 0.995 ms | 0.978 ms | 1.02x |
+| 1000 | 2.223 ms | 2.154 ms | 1.03x | 4.992 ms | 4.697 ms | 1.06x |
+| 5008 | 8.055 ms | 8.169 ms | 0.99x | 23.167 ms | 23.211 ms | 1.00x |
+
+No stable, material end-to-end cache speedup is visible: the small differences
+change with K and are comparable to timing variation. Absolute timings depend
+on hardware and load; pass K values after `--` to rerun targeted cases.
+
+## Systematic vs Ordinary Performance
+
+Run both code types automatically without changing the original performance
+example:
+
+```bash
+cargo run --release --locked --example code_type_performance
+```
+
+It uses identical source data, symbol size, packet budget, and K values, checks
+every recovered source symbol, and reports median encode/decode times. Pass K
+values after `--` for targeted runs.
 
 ## Validation
 
